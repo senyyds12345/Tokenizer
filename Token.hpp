@@ -54,7 +54,7 @@ private:
     size_t pos;
     Token token;
     std::string src;
-    static constexpr inline const std::array<OpEntry, 23> wordTable = {{
+    static constexpr inline const std::array<OpEntry, 24> wordTable = {{
         {">=", GTOET},
         {"<=", LTOET},
         {"!=", NE},
