@@ -1,6 +1,8 @@
 
 # Tokenizer
 
+**[User Guide ->](./USERGUIDE.md)**
+
 A high-performance, zero-copy C++20 lexer that tokenizes 200 lines of C++ code in 11 milliseconds.
 
 ## Usage
@@ -11,7 +13,7 @@ A high-performance, zero-copy C++20 lexer that tokenizes 200 lines of C++ code i
 
 int main() {
     std::string input = "def a(a): print(a)";
-    std::vector<std::string> values;
+    std::vector<std::string_view> values;
     std::vector<TokenType> types;
     
     token::tokenizer(input, values, types);
@@ -23,7 +25,7 @@ int main() {
 }
 ```
 
-Features
+# Features
 
 · Zero-copy: returns std::string_view into the source string
 · Header-only: single include, no dependencies
@@ -31,17 +33,17 @@ Features
 · Fast: 11ms for 200 lines of C++ code
 · C++20: constexpr, std::array, std::variant
 
-Performance
+# Performance
 
 Input Time
 70 lines smali 0.014 sec
 200 lines C++ 0.011 sec
 
-Token Types
+# Token Types
 
-NUM, SUM, MIN, MUL, DEL, LP, RP, COM, POW, ENG, NE, GTOET, LTOET, ET, GT, LT, ASS, SEM, COL, SCO, PRE, SHLE, SHRI, E_FLOAT, UNKNOWN
+NUM, SUM, MIN, MUL, DEL, LP, RP, COM, POW, END, PUN, NEG, STR, ENG, NE, GTOET, LTOET, ET, GT, LT, ASS, SEM, NOT, E_FLOAT, COL, SCO, LCB, RCB, PRE, SHLE, SHRI, AND, OR, AT, UNKNOWN
 
-Extending
+# Extending
 
 Add new operators in two places:
 
@@ -54,15 +56,15 @@ Add new operators in two places:
 
 Longer symbols must come before shorter ones (e.g., "::" before ":").
 
-Requirements
+# Requirements
 
 · C++20 compiler
 · No external dependencies
 
-License
+# License
 
 MIT
 
-Author
+# Author
 
 senyyds12345
