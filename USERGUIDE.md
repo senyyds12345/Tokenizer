@@ -169,9 +169,15 @@ Iterates through an array of action rules. If the current token type matches a r
 When writing custom parsing logic in Rule actions, these helpers allow you to manipulate the dual stacks directly:
 
 · apply(): Pops an operator and two operands, computes the result using the operator table, and pushes the result onto the value stack.
+
 · pushVal(Value v): Pushes a value onto the value stack.
+
 · pushOp(TokenType ty): Pushes an operator onto the operator stack.
+
 · topVal(): Returns the top value of the value stack.
+
 · topOp(): Returns the top operator of the operator stack.
+
 · popVal(): Pops the top value from the value stack.
+
 · popOp(): Pops the top operator from the operator stack.
