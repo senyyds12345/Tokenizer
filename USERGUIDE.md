@@ -24,14 +24,12 @@ int main() {
 
 ## Inherit from the Parser class
 
-If you find the tokenizer function too low-level, you can inherit from the Parser class. It provides various helper methods that streamline the parsing process.
-
-When in use
+If you find the tokenizer function too low-level, you can inherit from the `Parser` class. It provides various helper methods that streamline the parsing process.
 
 ```cpp
 #include "Token.hpp"
 
-class MyClass : Parser {
+class MyClass : public Parser {
 public:
     MyClass(const std::string& s) : Parser(s) {/*...*/}
     // ...
@@ -40,17 +38,17 @@ public:
 
 # New Features in v1.1.0
 
-1. Expression Parsing with Shunting-yard (Dual-Stack Algorithm)
+### 1. Expression Parsing with Shunting-yard (Dual-Stack Algorithm)
 
-This version introduces a complete implementation of the Shunting-yard dual-stack algorithm for expression parsing. You can easily evaluate mathematical expressions or string operations by leveraging Parser's helper methods and defining your own rules.
+This version introduces a complete implementation of the Shunting-yard dual-stack algorithm for expression parsing. You can easily evaluate mathematical expressions or string operations by leveraging `Parser`'s helper methods and defining your own rules.
 
-2. Undefined Behavior (UB) Fix in ctype Functions
+### 2. Undefined Behavior (UB) Fix in ctype Functions
 
-Previously, passing a potentially negative char (from std::string indexing) directly into isdigit or isspace could cause undefined behavior. This has been fixed by rigorously casting arguments to unsigned char before type judgment.
+Previously, passing a potentially negative `char` (from `std::string` indexing) directly into `isdigit` or `isspace` could cause undefined behavior. This has been fixed by rigorously casting arguments to `unsigned char` before type judgment.
 
-Usage Example: Expression Parser
+### Usage Example: Expression Parser
 
-Below is a sample implementation inheriting from Parser to evaluate expressions like 2 ^ 3 ^ 2 (with correct right-associativity) using the dual-stack algorithm:
+Below is a sample implementation inheriting from `Parser` to evaluate expressions like `2 ^ 3 ^ 2` (with correct right-associativity) using the dual-stack algorithm:
 
 ```cpp
 #include "Token.hpp"
@@ -122,62 +120,118 @@ public:
 };
 ```
 
-## Utility Functions
+# Utility Functions
 
-1. Constructor
-Parser(const std::string& src)
-Initializes the parser with source code, runs tokenizer to fill types and values vectors.
+1. **Constructor**
+   `Parser(const std::string& src)`
+   Initializes the parser with source code, runs tokenizer to fill `types` and `values` vectors.
 
-2. eat
-void eat()
-Consumes the current token and advances to the next one.
+2. **eat**
+   `void eat()`
+   Consumes the current token and advances to the next one.
 
-3. is_match
-StatusCode is_match(size_t n, TokenType type, std::string_view value = "")
-Checks if the token at specified index n matches the given type and optional value. Returns MATCH_STATUS_OK or MATCH_STATUS_FAILED.
+3. **is_match**
+   `StatusCode is_match(size_t n, TokenType type, std::string_view value = "")`
+   Checks if the token at specified index `n` matches the given type and optional value. Returns `MATCH_STATUS_OK` or `MATCH_STATUS_FAILED`.
 
-4. expect
-void expect(StatusCode match_return, const std::string& msg)
-If match_return is MATCH_STATUS_FAILED, throws a std::runtime_error with the provided message.
+4. **expect**
+   `void expect(StatusCode match_return, const std::string& msg)`
+   If `match_return` is `MATCH_STATUS_FAILED`, throws a `std::runtime_error` with the provided message.
 
-5. peekPrev
-TokenType peekPrev()
-Returns the type of the previous token.
+5. **peekPrev**
+   `TokenType peekPrev()`
+   Returns the type of the previous token.
 
-6. getType
-TokenType getType(size_t n)
-Returns the token type at the specified index. Returns UNK if out of bounds.
+6. **getType**
+   `TokenType getType(size_t n)`
+   Returns the token type at the specified index. Returns `UNK` if out of bounds.
 
-7. getVal
-std::string_view getVal(size_t n)
-Returns the token value at the specified index. Returns empty string if out of bounds.
+7. **getVal**
+   `std::string_view getVal(size_t n)`
+   Returns the token value at the specified index. Returns empty string if out of bounds.
 
-8. getPos
-size_t getPos()
-Returns the current parsing position.
+8. **getPos**
+   `size_t getPos()`
+   Returns the current parsing position.
 
-9. peek
-template <TokenType type> bool peek() const
-Checks if the next token matches the specified type.
+9. **peek**
+   `template <TokenType type> bool peek() const`
+   Checks if the next token matches the specified type.
 
-10. regex
-template <typename arr_t> void regex(const arr_t& action_t)
-Iterates through an array of action rules. If the current token type matches a rule's type, executes the associated action.
+10. **regex**
+    `template <typename arr_t> void regex(const arr_t& action_t)`
+    Iterates through an array of action rules. If the current token type matches a rule's type, executes the associated action.
 
 # Stack Operation Functions (For Rule Actions)
 
-When writing custom parsing logic in Rule actions, these helpers allow you to manipulate the dual stacks directly:
+When writing custom parsing logic in `Rule` actions, these helpers allow you to manipulate the dual stacks directly:
 
-· apply(): Pops an operator and two operands, computes the result using the operator table, and pushes the result onto the value stack.
+- `apply()`: Pops an operator and two operands, computes the result using the operator table, and pushes the result onto the value stack.
+- `pushVal(Value v)`: Pushes a value onto the value stack.
+- `pushOp(TokenType ty)`: Pushes an operator onto the operator stack.
+- `topVal()`: Returns the top value of the value stack.
+- `topOp()`: Returns the top operator of the operator stack.
+- `popVal()`: Pops the top value from the value stack.
+- `popOp()`: Pops the top operator from the operator stack.
 
-· pushVal(Value v): Pushes a value onto the value stack.
+# AST (v1.2.0)
 
-· pushOp(TokenType ty): Pushes an operator onto the operator stack.
+The `AST` class provides a lightweight node tree builder plus a variable environment. Node factories return `std::unique_ptr<ASTNode>` for automatic memory management.
 
-· topVal(): Returns the top value of the value stack.
+## Node Types
 
-· topOp(): Returns the top operator of the operator stack.
+| Struct | Fields | Purpose |
+|--------|--------|---------|
+| `Number` | `double val` | numeric literal |
+| `Str` | `std::string val` | string literal |
+| `Var` | `std::string name` | variable reference |
+| `Op` | `TokenType op`, `left`, `right` | binary operation |
 
-· popVal(): Pops the top value from the value stack.
+## Factory Methods
 
-· popOp(): Pops the top operator from the operator stack.
+```cpp
+std::unique_ptr<ASTNode> make_number(double val);
+std::unique_ptr<ASTNode> make_str(std::string s);
+std::unique_ptr<ASTNode> make_var(std::string name);
+std::unique_ptr<ASTNode> make_op(TokenType op,
+    std::unique_ptr<ASTNode> left,
+    std::unique_ptr<ASTNode> right);
+```
+
+## Environment
+
+```cpp
+Value& getVar(const std::string& name,
+              const std::string& e_msg = "unknown variable: ");
+void setVar(std::string name, Value val);
+```
+
+`getVar` throws if the name is not found. `setVar` silently ignores empty names.
+
+## Root Holder
+
+```cpp
+void setRoot(std::unique_ptr<ASTNode> r);
+const ASTNode* getRoot();
+```
+
+Users implement their own `eval(const ASTNode*)` — the `AST` class does not define evaluation semantics.
+
+## Example
+
+```cpp
+class MyLang : public Parser {
+public:
+    Value eval(const ASTNode* node) {
+        if (auto* n = std::get_if<Number>(&node->type)) return n->val;
+        if (auto* s = std::get_if<Str>(&node->type))    return s->val;
+        if (auto* v = std::get_if<Var>(&node->type))    return ast.getVar(v->name);
+        if (auto* o = std::get_if<Op>(&node->type)) {
+            Value l = eval(o->left.get());
+            Value r = eval(o->right.get());
+            return opTable.at(o->op)(l, r);
+        }
+        throw std::runtime_error("unknown node");
+    }
+};
+```

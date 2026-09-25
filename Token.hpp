@@ -5,6 +5,7 @@
 #include <cstddef>
 #include <functional>
 #include <cstring>
+#include <memory>
 #include <stack>
 #include <cmath>
 #include <string>
@@ -13,12 +14,14 @@
 #include <string_view>
 #include <stdexcept>
 #include <unordered_map>
+#include <utility>
 #include <variant>
 #include <vector>
 
 using Value = std::variant<
     double,
-    std::string
+    std::string,
+    bool
 >;
 
 enum TokenType
@@ -26,8 +29,8 @@ enum TokenType
     NUM,  // 数字(包括小数)
     SUM,  // +
     MIN,  // -
-    MUL,  // *或×
-    DEL,    // /或÷
+    MUL,  // * or ×
+    DEL,    // / or ÷
     LP,    // (
     RP,    // )
     COM,  // ,
@@ -58,7 +61,7 @@ enum TokenType
     AT,   // @
     BAND,  // &
     BOR,   // |
-    UNK   // 未知
+    UNK   // unknown
 };
 
 enum StatusCode
@@ -78,16 +81,103 @@ struct OpEntry
     TokenType type;
 };
 
+// Token structure
 struct Token 
 {
     TokenType type;
     std::string_view value;
 };
 
+// Parser::regex Rule
 struct Rule
 {
     TokenType type;
     std::function<void()> action;
+};
+
+// AST Node
+struct ASTNode;
+
+struct Number {
+    double val;
+    Number() : val(0) {}
+    Number(double v) : val(v) {}
+};
+
+struct Op {
+    TokenType op;
+    std::unique_ptr<ASTNode> left;
+    std::unique_ptr<ASTNode> right;
+    Op(TokenType o, std::unique_ptr<ASTNode> le, std::unique_ptr<ASTNode> ri)
+        : op(o), left(std::move(le)), right(std::move(ri)) {}
+};
+
+struct Str {
+    std::string val;
+    Str(std::string v)
+        : val(std::move(v)) {}
+};
+
+struct Var {
+    std::string name;
+    Var(std::string n)
+        : name(std::move(n)) {}
+};
+
+struct ASTNode {
+    std::variant<Number, Op, Str, Var> type;
+};
+
+class AST {
+private:
+    std::unordered_map<std::string, Value> env;
+public:
+    std::unique_ptr<ASTNode> root;
+
+    void setRoot(std::unique_ptr<ASTNode> r) {
+        root = std::move(r);
+    }
+
+    const ASTNode* getRoot() {
+        return root.get();
+    }
+
+    Value& getVar(const std::string& name, const std::string& e_msg = "unknown variable: ") {
+        auto it = env.find(name);
+        if (it == env.end())
+            throw std::runtime_error(e_msg + name);
+        return it->second;
+    }
+
+    void setVar(std::string name, Value val) {
+        if (!name.empty())
+            env[std::move(name)] = std::move(val);
+    }
+
+    std::unique_ptr<ASTNode> make_number(double val) {
+        auto node = std::make_unique<ASTNode>();
+        node->type = Number(val);
+        return node;
+    }
+
+    std::unique_ptr<ASTNode> make_op(TokenType op, std::unique_ptr<ASTNode> left, std::unique_ptr<ASTNode> right) {
+        auto node = std::make_unique<ASTNode>();
+        node->type = Op(op, std::move(left), std::move(right));
+        return node;
+    }
+
+    std::unique_ptr<ASTNode> make_str(std::string s) {
+        auto node = std::make_unique<ASTNode>();
+        node->type = Str(std::move(s));
+        return node;
+    }
+
+    std::unique_ptr<ASTNode> make_var(std::string name) {
+        auto node = std::make_unique<ASTNode>();
+        node->type = Var(std::move(name));
+        return node;
+    }
+
 };
 
 class Lexer
@@ -217,8 +307,26 @@ public:
         
         if (pos < src.size() && src[pos] == '-')
         {
-            if (pos == 0)
-            {
+            bool hasDigit = isdigit(static_cast<unsigned char>(src[pos + 1]));
+
+            if (!hasDigit) {
+                token.type = MIN;
+                token.value = "-";
+                pos++;
+                return &token;
+            }
+
+            bool isNegCtx = (pos == 0);
+            if (!isNegCtx) {
+                size_t prev = pos - 1;
+                while (prev > 0 && isspace(static_cast<unsigned char>(src[prev])))
+                    prev--;
+                for (const char& ctx : negCtx) {
+                    if (src[prev] == ctx) { isNegCtx = true; break; }
+                 }
+            }
+
+            if (isNegCtx) {
                 token.type = NUM;
                 size_t start = pos;
                 int count = 0;
@@ -226,28 +334,10 @@ public:
                 parserNumber(count);
                 token.value = std::string_view(src.data() + start, pos - start);
                 return &token;
-            } else {
-                size_t prev = pos - 1;
-                while (prev > 0 && isspace(static_cast<unsigned char>(src[prev])))
-                {
-                    prev--;
-                }
-                for (const char& ctx : negCtx)
-                {
-                    if (src[prev] == ctx)
-                    {
-                        token.type = NUM;
-                        size_t start = pos;
-                        int count = 0;
-                        pos++;
-                        parserNumber(count);
-                        token.value = std::string_view(src.data() + start, pos - start);
-                        return &token;
-                    }
-                }
             }
+
             token.type = MIN;
-            token.value = std::string_view(&src[pos], 1);
+            token.value = "-";
             pos++;
             return &token;
         }
@@ -274,6 +364,9 @@ class Parser {
 private:
     const std::string& src;
     size_t pos;
+protected:
+    std::stack<TokenType> ops;
+    std::stack<Value> vals;
     
     static inline const std::unordered_map<TokenType, std::function<Value(const Value&, const Value&)>> opTable = {
         {SUM, [](const Value& a, const Value& b) -> Value {
@@ -308,16 +401,62 @@ private:
                 if (auto* y = std::get_if<double>(&b))
                     return std::pow(*x, *y);
             throw std::runtime_error("^ 类型不匹配");
+        }},
+        {AND, [](const Value& a, const Value& b) -> Value {
+            if (auto* x = std::get_if<bool>(&a))
+                if (auto* y = std::get_if<bool>(&b))
+                    return *x && *y;
+            throw std::runtime_error("&& 类型不匹配");
+        }},
+        {OR, [](const Value& a, const Value &b) -> Value {
+            if (auto* x = std::get_if<bool>(&a))
+                if (auto* y = std::get_if<bool>(&b))
+                    return *x || *y;
+            throw std::runtime_error("|| 类型不匹配");
+        }},
+        {EQ, [](const Value& a, const Value& b) -> Value {
+            if (auto* x = std::get_if<double>(&a))
+                if (auto* y = std::get_if<double>(&b))
+                    return *x == *y;
+            throw std::runtime_error("== 类型不匹配");
+        }},
+        {NE, [](const Value& a, const Value& b) -> Value {
+            if (auto* x = std::get_if<double>(&a))
+                if (auto* y = std::get_if<double>(&b))
+                    return *x != *y;
+            throw std::runtime_error("!= 类型不匹配");
+        }},
+        {GE, [](const Value& a, const Value& b) -> Value {
+            if (auto* x = std::get_if<double>(&a))
+                if (auto* y = std::get_if<double>(&b))
+                    return *x >= *y;
+            throw std::runtime_error(">= 类型不匹配");
+        }},
+        {LE, [](const Value& a, const Value& b) -> Value {
+            if (auto* x = std::get_if<double>(&a))
+                if (auto* y = std::get_if<double>(&b))
+                    return *x <= *y;
+            throw std::runtime_error("<= 类型不匹配");
+        }},
+        {GT, [](const Value& a, const Value& b) -> Value {
+            if (auto* x = std::get_if<double>(&a))
+                if (auto* y = std::get_if<double>(&b))
+                    return *x > *y;
+            throw std::runtime_error("> 类型不匹配");
+        }},
+        {LT, [](const Value& a, const Value& b) -> Value {
+            if (auto* x = std::get_if<double>(&a))
+                if (auto* y = std::get_if<double>(&b))
+                    return *x < *y;
+            throw std::runtime_error("< 类型不匹配");
         }}
     };
-protected:
-    std::stack<TokenType> ops;
-    std::stack<Value> vals;
 public:
     TokenType cuTy;
     std::string_view cuVal;
     std::vector<TokenType> types;
     std::vector<std::string_view> values;
+    AST ast;
 
     Parser(const std::string& src) : src(src), pos(0)
     {
@@ -397,6 +536,7 @@ public:
     }
     // 栈操作函数 请在Rule结构体的action函数使用
     void apply() {
+        if (vals.size() < 2 || ops.empty()) return;
         TokenType op = ops.top(); ops.pop();
         Value b = std::move(vals.top()); vals.pop();
         Value a = std::move(vals.top()); vals.pop();
@@ -429,14 +569,14 @@ public:
     
     static int prec(TokenType t) {
         switch (t) {
-            case OR:  return 1;
+            case OR: return 1;
             case AND: return 2;
             case EQ:
-            case NE:  return 3;
+            case NE: return 3;
             case LT:
             case GT:
             case LE:
-            case GE:  return 4;
+            case GE: return 4;
             case SUM:
             case MIN: return 5;
             case MUL:

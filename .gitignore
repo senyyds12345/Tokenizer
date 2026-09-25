@@ -54,7 +54,6 @@ compile_commands.json
 
 # Temporary files
 *.tmp
-*.log
 *.bak
 *.swp
 
@@ -70,3 +69,4 @@ Testing/
 
 res.md
 Token测试.cpp
+TokenT
